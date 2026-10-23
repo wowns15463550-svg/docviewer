@@ -69,7 +69,7 @@
 <body>
 <header>
   <h1>문서 뷰어</h1>
-  <span id="ver" style="font-size:12px;opacity:.7">v1</span>
+  <span id="ver" style="font-size:12px;opacity:.7">v2</span>
 </header>
 <main>
   <button class="open" id="openBtn">파일 열기
@@ -85,8 +85,8 @@
 
 <script src="lib/xlsx.full.min.js"></script>
 <script type="module">
-import * as pdfjsLib from './lib/pdf.min.mjs';
-pdfjsLib.GlobalWorkerOptions.workerSrc = './lib/pdf.worker.min.mjs';
+import * as pdfjsLib from './lib/pdf.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = './lib/pdf.worker.min.js';
 
 const $ = (s) => document.querySelector(s);
 const out = $('#out'), empty = $('#empty'), busy = $('#busy'), busyMsg = $('#busyMsg');
@@ -469,11 +469,32 @@ async function loadShared() {
   } catch (e) { console.warn(e); }
 }
 
-/* ---------- 서비스워커 ---------- */
-if ('serviceWorker' in navigator) {
+/* ---------- 안드로이드 앱: 파일 앱에서 '열기'로 넘어온 파일 ---------- */
+async function loadNativeIntent() {
+  if (!window.NativeBridge) return;
+  let info = null;
+  try { info = JSON.parse(window.NativeBridge.getIntentInfo() || 'null'); } catch {}
+  if (!info) return;
+  try {
+    const res = await fetch('/intent/current?t=' + info.t, { cache: 'no-store' });
+    if (!res.ok) throw new Error('파일을 읽지 못했습니다');
+    const blob = await res.blob();
+    await handleFile(new File([blob], info.name, { type: info.mime || blob.type }));
+  } catch (e) {
+    reset();
+    out.append(card('오류', el('div', { class: 'warn', text: String(e.message || e) })));
+  }
+}
+window.__onIntentFile = loadNativeIntent;
+
+/* ---------- 서비스워커 (웹 버전에서만) ---------- */
+if (window.NativeBridge) {
+  document.querySelector('#empty').innerHTML = '파일 앱에서 파일을 누르면<br><b>문서 뷰어</b>로 바로 열 수 있어요.';
+} else if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 loadShared();
+loadNativeIntent();
 </script>
 </body>
 </html>

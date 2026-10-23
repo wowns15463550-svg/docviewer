@@ -1,12 +1,12 @@
-const VERSION = 'docviewer-v1';
+const VERSION = 'docviewer-v2';
 const SHELL = [
   './',
   'index.html',
   'manifest.webmanifest',
   'icon-192.png',
   'icon-512.png',
-  'lib/pdf.min.mjs',
-  'lib/pdf.worker.min.mjs',
+  'lib/pdf.min.js',
+  'lib/pdf.worker.min.js',
   'lib/xlsx.full.min.js'
 ];
 
