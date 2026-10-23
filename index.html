@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5c400">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>문서 뷰어</title>
+<style>
+  :root{
+    --bg:#f6f6f4; --card:#fff; --text:#1c1c1a; --sub:#6b6b66; --line:#e4e4df;
+    --accent:#f5c400; --accent-text:#1c1c1a; --chip:#f0efe8;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#141412; --card:#1e1e1b; --text:#eeeee8; --sub:#9a9a92; --line:#2e2e2a; --chip:#2a2a26; }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    font-size:16px;line-height:1.45}
+  header{background:var(--accent);color:var(--accent-text);padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:18px;font-weight:800}
+  main{padding:14px 16px calc(env(safe-area-inset-bottom) + 40px);max-width:760px;margin:0 auto}
+  .open{display:block;width:100%;padding:18px;border:0;border-radius:14px;background:var(--text);color:var(--bg);
+    font-size:17px;font-weight:700;text-align:center;cursor:pointer}
+  .open small{display:block;font-weight:400;opacity:.7;margin-top:2px;font-size:12.5px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:14px}
+  .card h2{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--sub);letter-spacing:.02em}
+  .kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:15px}
+  .kv .k{color:var(--sub)}
+  .kv .v{word-break:break-all;font-weight:600}
+  .chip{display:inline-block;background:var(--chip);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600;margin-left:6px}
+  .list{margin:0;padding:0;list-style:none;font-size:15px}
+  .list li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  .list li:first-child{border-top:0}
+  .list .r{color:var(--sub);text-align:right}
+  .nav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .nav button{border:1px solid var(--line);background:var(--chip);color:var(--text);border-radius:10px;
+    padding:10px 16px;font-size:16px;font-weight:700;cursor:pointer}
+  .nav input{width:64px;text-align:center;border:1px solid var(--line);border-radius:10px;padding:10px 4px;
+    font-size:16px;background:var(--card);color:var(--text)}
+  .nav .of{color:var(--sub);font-size:15px}
+  .canvas-wrap{background:#8a8a85;border-radius:10px;padding:8px;overflow:auto;text-align:center}
+  canvas{max-width:100%;height:auto;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.3)}
+  .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+  .tabs button{flex:0 0 auto;border:1px solid var(--line);background:var(--chip);color:var(--text);
+    border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;cursor:pointer}
+  .tabs button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+  .tbl-wrap{overflow:auto;max-height:55vh;border:1px solid var(--line);border-radius:10px}
+  table{border-collapse:collapse;font-size:13px;white-space:nowrap}
+  td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
+  th{background:var(--chip);position:sticky;top:0;font-weight:700}
+  td.n{color:var(--sub);background:var(--chip);text-align:right;position:sticky;left:0}
+  img.pv{max-width:100%;border-radius:8px;display:block;margin:0 auto;background:
+    repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/16px 16px}
+  pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:14px;margin:0;max-height:55vh;overflow:auto}
+  .note{font-size:13.5px;color:var(--sub);margin-top:8px}
+  .warn{background:#fff6d6;color:#5b4a00;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
+  @media (prefers-color-scheme:dark){.warn{background:#3a3210;color:#f1dc86}}
+  .hide{display:none!important}
+  .empty{text-align:center;color:var(--sub);padding:34px 10px;font-size:15px}
+  .busy{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:20}
+  .busy div{background:var(--card);padding:16px 22px;border-radius:12px;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>문서 뷰어</h1>
+  <span id="ver" style="font-size:12px;opacity:.7">v1</span>
+</header>
+<main>
+  <button class="open" id="openBtn">파일 열기
+    <small>PDF · 엑셀(xlsx/xls/csv) · 이미지 · 한글(hwpx)</small>
+  </button>
+  <input type="file" id="file" class="hide"
+    accept=".pdf,.xlsx,.xls,.xlsm,.csv,.tsv,.hwpx,.hwp,.jpg,.jpeg,.png,.webp,.gif,.bmp,application/pdf,image/*,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv">
+
+  <div id="empty" class="empty">파일을 열면 여기에 정보가 표시됩니다.<br>파일 앱에서 <b>공유 → 문서 뷰어</b>로도 열 수 있어요.</div>
+  <div id="out"></div>
+</main>
+<div id="busy" class="busy hide"><div id="busyMsg">분석 중...</div></div>
+
+<script src="lib/xlsx.full.min.js"></script>
+<script type="module">
+import * as pdfjsLib from './lib/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = './lib/pdf.worker.min.mjs';
+
+const $ = (s) => document.querySelector(s);
+const out = $('#out'), empty = $('#empty'), busy = $('#busy'), busyMsg = $('#busyMsg');
+
+/* ---------- 유틸 ---------- */
+const fmtBytes = (b) => {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b / 1048576).toFixed(2) + ' MB';
+  return (b / 1073741824).toFixed(2) + ' GB';
+};
+const ext = (n) => (n.split('.').pop() || '').toLowerCase();
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+};
+const setBusy = (on, msg) => { busy.classList.toggle('hide', !on); if (msg) busyMsg.textContent = msg; };
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+function card(title, ...kids) {
+  return el('section', { class: 'card' }, title ? el('h2', { text: title }) : null, ...kids);
+}
+function kv(rows) {
+  const g = el('div', { class: 'kv' });
+  for (const [k, v] of rows) {
+    if (v == null || v === '') continue;
+    g.append(el('div', { class: 'k', text: k }), el('div', { class: 'v' }, v));
+  }
+  return g;
+}
+
+/* ---------- 용지 규격 판별 (mm, 세로 기준 w<h) ---------- */
+const PAPERS = [
+  ['A0', 841, 1189], ['A1', 594, 841], ['A2', 420, 594], ['A3', 297, 420], ['A4', 210, 297],
+  ['A5', 148, 210], ['A6', 105, 148], ['A7', 74, 105],
+  ['B0(JIS)', 1030, 1456], ['B1(JIS)', 728, 1030], ['B2(JIS)', 515, 728], ['B3(JIS)', 364, 515],
+  ['B4(JIS)', 257, 364], ['B5(JIS)', 182, 257], ['B6(JIS)', 128, 182],
+  ['사륙배판(188×257)', 188, 257], ['신국판', 152, 225], ['크라운판', 176, 248], ['국판', 148, 210],
+  ['엽서', 100, 148], ['명함', 50, 90], ['명함(대)', 55, 91],
+  ['Letter', 216, 279], ['Legal', 216, 356], ['Tabloid', 279, 432]
+];
+function matchPaper(wmm, hmm, tol = 2) {
+  const w = Math.min(wmm, hmm), h = Math.max(wmm, hmm);
+  let best = null;
+  for (const [name, pw, ph] of PAPERS) {
+    const d = Math.max(Math.abs(w - pw), Math.abs(h - ph));
+    if (d <= tol && (!best || d < best.d)) best = { name, d };
+  }
+  return best ? best.name : null;
+}
+const ptToMm = (pt) => pt * 25.4 / 72;
+const r1 = (n) => Math.round(n * 10) / 10;
+function describeSize(wmm, hmm) {
+  const name = matchPaper(wmm, hmm);
+  const orient = Math.abs(wmm - hmm) < 1 ? '정사각' : (wmm > hmm ? '가로' : '세로');
+  return { text: `${r1(wmm)} × ${r1(hmm)} mm`, name, orient };
+}
+
+/* ---------- 렌더 초기화 ---------- */
+function reset() { out.replaceChildren(); empty.classList.add('hide'); window.scrollTo(0, 0); }
+function baseInfo(file, label) {
+  return card('파일',
+    kv([
+      ['이름', file.name],
+      ['형식', el('span', {}, label)],
+      ['파일 크기', `${fmtBytes(file.size)} (${file.size.toLocaleString()} B)`],
+      ['수정일', file.lastModified ? new Date(file.lastModified).toLocaleString('ko-KR') : '']
+    ]));
+}
+
+/* ---------- PDF ---------- */
+let pdfDoc = null, curPage = 1, rendering = false, pendingPage = null, renderTask = null;
+
+async function openPdf(file) {
+  const buf = await file.arrayBuffer();
+  if (pdfDoc) { try { pdfDoc.destroy(); } catch {} pdfDoc = null; }
+  const task = pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false });
+  let doc;
+  try { doc = await task.promise; }
+  catch (e) {
+    out.append(baseInfo(file, 'PDF'), card('', el('div', { class: 'warn', text: 'PDF를 열지 못했습니다: ' + (e.message || e) })));
+    return;
+  }
+  pdfDoc = doc;
+  const n = doc.numPages;
+
+  // 페이지별 크기 수집
+  const sizes = [];
+  for (let i = 1; i <= n; i++) {
+    if (i % 20 === 0) { busyMsg.textContent = `페이지 분석 중... ${i}/${n}`; await tick(); }
+    const p = await doc.getPage(i);
+    const vp = p.getViewport({ scale: 1 });
+    sizes.push([ptToMm(vp.width), ptToMm(vp.height)]);
+    p.cleanup();
+  }
+  // 같은 크기 연속 구간으로 묶기
+  const groups = [];
+  for (let i = 0; i < n; i++) {
+    const [w, h] = sizes[i];
+    const g = groups[groups.length - 1];
+    if (g && Math.abs(g.w - w) < 0.5 && Math.abs(g.h - h) < 0.5) g.to = i + 1;
+    else groups.push({ from: i + 1, to: i + 1, w, h });
+  }
+
+  let meta = {};
+  try { meta = await doc.getMetadata(); } catch {}
+  const info = meta.info || {};
+  const first = describeSize(sizes[0][0], sizes[0][1]);
+
+  const head = baseInfo(file, 'PDF');
+  const summary = card('PDF 정보',
+    kv([
+      ['페이지 수', `${n}쪽`],
+      ['용지 크기', el('span', {}, first.text, first.name ? el('span', { class: 'chip', text: first.name }) : null,
+        el('span', { class: 'chip', text: first.orient })) ],
+      ['PDF 버전', info.PDFFormatVersion],
+      ['제작 프로그램', [info.Creator, info.Producer].filter(Boolean).join(' / ')],
+      ['제목', info.Title],
+      ['암호화', info.IsAcroFormPresent ? '입력 양식 있음' : '']
+    ]));
+  if (groups.length > 1) {
+    summary.append(el('div', { class: 'warn', text: `페이지 크기가 ${groups.length}가지로 섞여 있습니다. 아래 목록을 확인하세요.` }));
+  }
+
+  const sizeCard = card('페이지별 크기');
+  const ul = el('ul', { class: 'list' });
+  for (const g of groups) {
+    const d = describeSize(g.w, g.h);
+    ul.append(el('li', {},
+      el('span', { text: g.from === g.to ? `${g.from}쪽` : `${g.from}–${g.to}쪽 (${g.to - g.from + 1}장)` }),
+      el('span', { class: 'r', text: `${d.text} · ${d.name || '규격 외'} · ${d.orient}` })));
+  }
+  sizeCard.append(ul);
+
+  // 미리보기
+  const prev = card('미리보기');
+  const input = el('input', { type: 'number', min: 1, max: n, value: 1, inputmode: 'numeric' });
+  const canvas = el('canvas');
+  const goto = (v) => { v = Math.max(1, Math.min(n, v | 0)); input.value = v; queueRender(v, canvas); };
+  prev.append(
+    el('div', { class: 'nav' },
+      el('button', { text: '◀', onclick: () => goto(curPage - 1) }),
+      input, el('span', { class: 'of', text: `/ ${n}` }),
+      el('button', { text: '▶', onclick: () => goto(curPage + 1) })),
+    el('div', { class: 'canvas-wrap' }, canvas),
+    el('div', { class: 'note', text: '회색 영역은 폰 화면 기준으로 맞춘 미리보기입니다.' }));
+  input.addEventListener('change', () => goto(+input.value));
+
+  out.append(head, summary, sizeCard, prev);
+  curPage = 1;
+  queueRender(1, canvas);
+}
+
+function queueRender(num, canvas) {
+  if (rendering) { pendingPage = [num, canvas]; if (renderTask) renderTask.cancel(); return; }
+  renderPage(num, canvas);
+}
+async function renderPage(num, canvas) {
+  if (!pdfDoc) return;
+  rendering = true; curPage = num;
+  try {
+    const page = await pdfDoc.getPage(num);
+    const base = page.getViewport({ scale: 1 });
+    const cssW = Math.min(canvas.parentElement.clientWidth - 16 || 340, 900);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const scale = (cssW / base.width) * dpr;
+    const vp = page.getViewport({ scale });
+    canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+    canvas.style.width = Math.floor(vp.width / dpr) + 'px';
+    renderTask = page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
+    await renderTask.promise;
+    page.cleanup();
+  } catch (e) { /* 취소된 렌더는 무시 */ }
+  rendering = false; renderTask = null;
+  if (pendingPage) { const [n, c] = pendingPage; pendingPage = null; renderPage(n, c); }
+}
+
+/* ---------- 엑셀 / CSV ---------- */
+function decodeText(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { return new TextDecoder('euc-kr').decode(buf); }
+}
+async function openSheet(file, kind) {
+  const buf = await file.arrayBuffer();
+  let wb;
+  try {
+    if (kind === 'csv') wb = XLSX.read(decodeText(buf), { type: 'string' });
+    else wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  } catch (e) {
+    out.append(baseInfo(file, '엑셀'), card('', el('div', { class: 'warn', text: '파일을 열지 못했습니다: ' + (e.message || e) })));
+    return;
+  }
+  const names = wb.SheetNames;
+  const hiddenMap = {};
+  (wb.Workbook?.Sheets || []).forEach((s, i) => { if (s.Hidden) hiddenMap[names[i]] = true; });
+
+  const dims = names.map((nm) => {
+    const ws = wb.Sheets[nm];
+    if (!ws || !ws['!ref']) return { nm, rows: 0, cols: 0 };
+    const r = XLSX.utils.decode_range(ws['!ref']);
+    return { nm, rows: r.e.r - r.s.r + 1, cols: r.e.c - r.s.c + 1 };
+  });
+
+  const label = { xlsx: '엑셀 (xlsx)', xls: '엑셀 (xls)', xlsm: '엑셀 (xlsm)', csv: 'CSV/텍스트' }[kind] || '엑셀';
+  const head = baseInfo(file, label);
+  const summary = card('시트 정보', kv([['시트 개수', `${names.length}개`]]));
+  const ul = el('ul', { class: 'list' });
+  for (const d of dims) {
+    ul.append(el('li', {},
+      el('span', { text: d.nm + (hiddenMap[d.nm] ? ' (숨김)' : '') }),
+      el('span', { class: 'r', text: `${d.rows.toLocaleString()}행 × ${d.cols.toLocaleString()}열` })));
+  }
+  summary.append(ul, el('div', { class: 'note', text: '행·열 수는 사용된 범위 기준입니다(서식만 있는 빈 칸 포함 가능).' }));
+
+  const prev = card('내용 미리보기');
+  const tabs = el('div', { class: 'tabs' });
+  const wrap = el('div', { class: 'tbl-wrap' });
+  const note = el('div', { class: 'note' });
+  const MAXR = 100, MAXC = 30;
+
+  function show(idx) {
+    [...tabs.children].forEach((b, i) => b.classList.toggle('on', i === idx));
+    const nm = names[idx], ws = wb.Sheets[nm];
+    wrap.replaceChildren(); note.textContent = '';
+    if (!ws || !ws['!ref']) { wrap.append(el('div', { class: 'empty', text: '빈 시트입니다.' })); return; }
+    const full = XLSX.utils.decode_range(ws['!ref']);
+    const e = { r: Math.min(full.e.r, full.s.r + MAXR - 1), c: Math.min(full.e.c, full.s.c + MAXC - 1) };
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', range: { s: full.s, e } });
+    const table = el('table');
+    const thr = el('tr', {}, el('th', { text: '' }));
+    for (let c = full.s.c; c <= e.c; c++) thr.append(el('th', { text: XLSX.utils.encode_col(c) }));
+    table.append(el('thead', {}, thr));
+    const tb = el('tbody');
+    rows.forEach((row, i) => {
+      const tr = el('tr', {}, el('td', { class: 'n', text: String(full.s.r + i + 1) }));
+      for (let c = 0; c <= e.c - full.s.c; c++) tr.append(el('td', { text: row[c] == null ? '' : String(row[c]) }));
+      tb.append(tr);
+    });
+    table.append(tb); wrap.append(table);
+    const cutR = full.e.r > e.r, cutC = full.e.c > e.c;
+    if (cutR || cutC) note.textContent = `미리보기는 앞쪽 ${MAXR}행 × ${MAXC}열까지만 표시합니다.`;
+  }
+  names.forEach((nm, i) => tabs.append(el('button', { text: nm, onclick: () => show(i) })));
+  prev.append(tabs, wrap, note);
+  out.append(head, summary, prev);
+  if (names.length) show(0);
+}
+
+/* ---------- 이미지 ---------- */
+async function openImage(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; }).catch(() => {});
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const rows = [['픽셀 크기', w ? `${w.toLocaleString()} × ${h.toLocaleString()} px` : '확인 불가']];
+  if (w) {
+    const mm = (px, dpi) => r1(px / dpi * 25.4);
+    rows.push(['300dpi 인쇄 크기', `${mm(w, 300)} × ${mm(h, 300)} mm`]);
+    rows.push(['150dpi 인쇄 크기', `${mm(w, 150)} × ${mm(h, 150)} mm`]);
+    rows.push(['메가픽셀', r1(w * h / 1e6) + ' MP']);
+  }
+  out.append(baseInfo(file, '이미지'), card('이미지 정보', kv(rows)),
+    card('미리보기', el('img', { class: 'pv', src: url })));
+}
+
+/* ---------- 한글 (hwpx) ---------- */
+async function readZip(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let i = u8.length - 22;
+  while (i >= 0 && dv.getUint32(i, true) !== 0x06054b50) i--;
+  if (i < 0) throw new Error('ZIP 구조가 아닙니다');
+  const n = dv.getUint16(i + 10, true);
+  let p = dv.getUint32(i + 16, true);
+  const entries = {};
+  for (let k = 0; k < n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true);
+    const csize = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    const lho = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+    entries[name] = { method, csize, lho };
+    p += 46 + nl + xl + cl;
+  }
+  return {
+    entries,
+    async read(name) {
+      const e = entries[name];
+      const nl = dv.getUint16(e.lho + 26, true), xl = dv.getUint16(e.lho + 28, true);
+      const start = e.lho + 30 + nl + xl;
+      const data = u8.subarray(start, start + e.csize);
+      if (e.method === 0) return data;
+      const s = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new Uint8Array(await new Response(s).arrayBuffer());
+    }
+  };
+}
+async function openHwpx(file) {
+  let zip;
+  try { zip = await readZip(await file.arrayBuffer()); }
+  catch (e) {
+    out.append(baseInfo(file, '한글 (hwpx)'), card('', el('div', { class: 'warn', text: '열지 못했습니다: ' + (e.message || e) })));
+    return;
+  }
+  const secNames = Object.keys(zip.entries).filter((n) => /^Contents\/section\d+\.xml$/i.test(n)).sort();
+  let text = '', paras = 0;
+  for (const nm of secNames) {
+    const xml = new TextDecoder().decode(await zip.read(nm));
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    for (const p of doc.getElementsByTagName('hp:p')) {
+      paras++;
+      let line = '';
+      for (const t of p.getElementsByTagName('hp:t')) line += t.textContent;
+      if (line.trim()) text += line + '\n';
+    }
+  }
+  const images = Object.keys(zip.entries).filter((n) => /^BinData\//i.test(n)).length;
+  const prev = card('본문 텍스트 미리보기');
+  const shown = text.slice(0, 4000);
+  prev.append(el('pre', { text: shown || '(텍스트를 찾지 못했습니다)' }));
+  if (text.length > 4000) prev.append(el('div', { class: 'note', text: `전체 ${text.length.toLocaleString()}자 중 앞부분만 표시합니다.` }));
+  out.append(baseInfo(file, '한글 (hwpx)'),
+    card('문서 정보', kv([
+      ['구역(섹션) 수', `${secNames.length}개`],
+      ['문단 수', paras.toLocaleString()],
+      ['글자 수(공백 포함)', text.replace(/\n/g, '').length.toLocaleString() + '자'],
+      ['포함된 이미지/바이너리', `${images}개`]
+    ]), el('div', { class: 'warn', text: '한글 파일은 페이지 수·용지 크기를 정확히 알 수 없습니다. 정확한 확인은 PDF 변환본으로 하세요.' })),
+    prev);
+}
+function openHwp(file) {
+  out.append(baseInfo(file, '한글 (hwp)'),
+    card('', el('div', { class: 'warn', text: '구형 .hwp는 폰에서 내용을 읽을 수 없습니다. 한글에서 PDF 또는 hwpx로 저장해서 열어 주세요.' })));
+}
+
+/* ---------- 디스패처 ---------- */
+async function handleFile(file) {
+  if (!file) return;
+  reset(); setBusy(true, '분석 중...');
+  const e = ext(file.name);
+  try {
+    if (e === 'pdf' || file.type === 'application/pdf') await openPdf(file);
+    else if (['xlsx', 'xlsm'].includes(e)) await openSheet(file, e);
+    else if (e === 'xls') await openSheet(file, 'xls');
+    else if (['csv', 'tsv'].includes(e)) await openSheet(file, 'csv');
+    else if (e === 'hwpx') await openHwpx(file);
+    else if (e === 'hwp') openHwp(file);
+    else if (file.type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(e)) await openImage(file);
+    else out.append(baseInfo(file, e ? e.toUpperCase() : '알 수 없음'),
+      card('', el('div', { class: 'warn', text: '이 형식은 아직 지원하지 않습니다. 기본 정보만 표시합니다.' })));
+  } catch (err) {
+    out.append(card('오류', el('div', { class: 'warn', text: String(err.message || err) })));
+  } finally { setBusy(false); }
+}
+
+const fileInput = $('#file');
+$('#openBtn').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { const f = fileInput.files[0]; fileInput.value = ''; handleFile(f); });
+
+/* ---------- 공유로 열기 (Android 공유 시트 → 문서 뷰어) ---------- */
+async function loadShared() {
+  if (!new URLSearchParams(location.search).has('shared')) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const cache = await caches.open('shared');
+    const key = new URL('shared-file', location.href).href;
+    const res = await cache.match(key);
+    if (!res) return;
+    const name = decodeURIComponent(res.headers.get('x-filename') || 'shared');
+    const blob = await res.blob();
+    await cache.delete(key);
+    await handleFile(new File([blob], name, { type: blob.type }));
+  } catch (e) { console.warn(e); }
+}
+
+/* ---------- 서비스워커 ---------- */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+loadShared();
+</script>
+</body>
+</html>
